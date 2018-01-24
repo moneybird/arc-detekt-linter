@@ -1,6 +1,6 @@
 # Arcanist Detekt Linter
 
-This is a []Detekt](https://github.com/arturbosch/detekt) Linter plugin for Arcanist.
+This is a [Detekt](https://github.com/arturbosch/detekt) Linter plugin for Arcanist.
 Detekt is a static code analysis tool for Kotlin code.
 
 ## Installation
