@@ -1,5 +1,4 @@
 <?php
-
 /*
  * Copyright (C) 2018 Moneybird
  * 
@@ -16,13 +15,12 @@
  * limitations under the License.
  *
  * Author: Robbin Voortman (robbin@moneybird.com)
- * Date: 24-01-2018
+ * Date: 07-02-2018
  */
-
 final class DetektLinter extends ArcanistExternalLinter {
 
   private $jarPath = null;
-  private $configPath = null;
+  private $detektConfig = null;
 
   public function getInfoURI() {
     return 'https://github.com/arturbosch/detekt';
@@ -61,6 +59,8 @@ final class DetektLinter extends ArcanistExternalLinter {
     return array(
       '-jar',
       $this->jarPath,
+      '-c',
+      $this->detektConfig ?: '.',
       '--input',
     );
   }
@@ -104,6 +104,11 @@ final class DetektLinter extends ArcanistExternalLinter {
         'help' => pht(
           'Specify a string identifying the Detekt JAR file.'),
       ),
+      'detektConfig' => array(
+        'type' => 'optional string',
+        'help' => pht(
+          'Specify a string identifying the Detekt.yml file'),
+      ),
     );
 
     return $options + parent::getLinterConfigurationOptions();
@@ -112,27 +117,44 @@ final class DetektLinter extends ArcanistExternalLinter {
   public function setLinterConfigurationValue($key, $value) {
     switch ($key) {
       case 'jar':
-        $working_copy = $this->getEngine()->getWorkingCopy();
-        $root = $working_copy->getProjectRoot();
-
         foreach ((array)$value as $path) {
-          if (Filesystem::pathExists($path)) {
+          if ($this->pathExist($path)) {
             $this->jarPath = $path;
             return;
-          }
-
-          $path = Filesystem::resolvePath($path, $root);
-          if (Filesystem::pathExists($path)) {
-            $this->jarPath = $path;
-            return;
+          } else {
+            throw new ArcanistUsageException(
+              pht('The detekt JAR could not be found. Please check the path in your config.')
+            );
           }
         }
-
-        throw new ArcanistUsageException(
-          pht('The detekt JAR could not be found. Please check the path in your config.'));
+     case 'detektConfig':
+      foreach ((array)$value as $path) {
+        if ($this->pathExist($path)) {
+            $this->detektConfig = $path;
+            return;
+          } else {
+            throw new ArcanistUsageException(
+              pht('The detekt.yml could not be found. Please check the path in your config.')
+            );
+          }
+        }
     }
 
     return parent::setLinterConfigurationValue($key, $value);
   }
 
+  private function pathExist($path) {
+    $working_copy = $this->getEngine()->getWorkingCopy();
+    $root = $working_copy->getProjectRoot();
+
+    if (Filesystem::pathExists($path)) {
+      return true;
+    }
+
+    $path = Filesystem::resolvePath($path, $root);
+    if (Filesystem::pathExists($path)) {
+      return true;
+    }
+    return false;
+  }
 }

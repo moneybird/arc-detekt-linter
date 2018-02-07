@@ -59,12 +59,14 @@ Configuration `.arclint`:
         "detekt": {
             "type": "detekt",
             "jar": "path/to/detekt-cli-1.0.0.[version].jar",
+            "detektConfig": "path/to/detekt.yml",
              "include": "(.kt$)"
         },
         // ...
     }
 }
 ```
+You can test your settings by running `arc lint`, arcanist will tell when something goes wrong.
 ## Arc Lint Feature Support
 The linter will:
 - Set the linenumber on which an lint error is detected.
