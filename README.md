@@ -71,10 +71,11 @@ You can test your settings by running `arc lint`, arcanist will tell when someth
 The linter will:
 - Set the linenumber on which an lint error is detected.
 - Show what the linting error was
+- Set the severity
+- Give an explanation of what went wrong
 
 It will not:
-- Set the severity (everything is a warning by default)
-- Autocorrect errors.
+- Autocorrect errors, although sometimes it gives suggestions.
 
 ## Usage
 Just run `arc lint` to lint the kotlin files and show warnings on the changed lines OR run `arc lint --lintall` to also show warning occuring in other lines of the changed files.

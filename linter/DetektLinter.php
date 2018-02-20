@@ -15,15 +15,15 @@
  * limitations under the License.
  *
  * Author: Robbin Voortman (robbin@moneybird.com)
- * Date: 07-02-2018
+ * Date: 20-02-2018
  */
 final class DetektLinter extends ArcanistExternalLinter {
-
   private $jarPath = null;
   private $detektConfig = null;
+  private $outputName = 'result';
 
   public function getInfoURI() {
-    return 'https://github.com/arturbosch/detekt';
+    return 'https://github.com/moneybird/arc-detekt-linter';
   }
 
   public function getInfoDescription() {
@@ -50,53 +50,6 @@ final class DetektLinter extends ArcanistExternalLinter {
     return true;
   }
 
-  protected function getMandatoryFlags() {
-    if ($this->jarPath === null) {
-      throw new ArcanistUsageException(
-        pht('Detekt JAR path is not yet configured. Please specify in .arclint the jar path.'));
-    }
-
-    return array(
-      '-jar',
-      $this->jarPath,
-      '-c',
-      $this->detektConfig ?: '.',
-      '--input',
-    );
-  }
-
-  protected function getDefaultFlags() {
-    return array();
-  }
-
-  protected function parseLinterOutput($path, $err, $stdout, $stderr) {
-
-    $messages = array();
-
-    $output = trim($stdout);
-    if (strlen($output) === 0) {
-      return $messages;
-    }
-
-    $lines = explode(PHP_EOL, $output);
-
-    foreach ($lines as $line) {
-
-      $matches = array();
-      if (preg_match('/^\s*(?P<message>[aA-zZ]+?)\s-(.+\s-)*?\s\[.+?\]\sat\s(.*?):(?P<line>\d*?):\d*?$/m', $line, $matches)) {
-        $lint_message = id(new ArcanistLintMessage())
-           ->setPath($path)
-           ->setCode($this->getLinterName())
-           ->setName(trim($matches['message']))
-           ->setLine(trim($matches['line']))
-           ->setSeverity(ArcanistLintSeverity::SEVERITY_WARNING);
-
-        $messages[] = $lint_message;
-      }
-    }
-    return $messages;
-  }
-
   public function getLinterConfigurationOptions() {
     $options = array(
       'jar' => array(
@@ -114,6 +67,9 @@ final class DetektLinter extends ArcanistExternalLinter {
     return $options + parent::getLinterConfigurationOptions();
   }
 
+  /**
+   * Set the configuration values.
+   */
   public function setLinterConfigurationValue($key, $value) {
     switch ($key) {
       case 'jar':
@@ -143,6 +99,79 @@ final class DetektLinter extends ArcanistExternalLinter {
     return parent::setLinterConfigurationValue($key, $value);
   }
 
+  protected function getMandatoryFlags() {
+    if ($this->jarPath === null) {
+      throw new ArcanistUsageException(
+        pht('Detekt JAR path is not yet configured. Please specify in .arclint the jar path.'));
+    }
+
+    return array(
+      '-jar',
+      $this->jarPath,
+      '--output',
+      dirname(__FILE__).'/' ,
+      '--output-name',
+      $this->outputName,
+      '-c',
+      $this->detektConfig ?: '.',
+      '--input',
+    );
+  }
+
+  protected function getDefaultFlags() {
+    return array();
+  }
+
+  protected function parseLinterOutput($path, $err, $stdout, $stderr) {
+    $file = dirname(__FILE__).'/'.$this->outputName.'.xml';
+    if (!file_exists($file)) { return []; }
+
+    $xml_string = file_get_contents($file);
+    $xml = simplexml_load_string($xml_string)->{'file'};
+
+    $violations = $xml->{'error'};
+    if ($violations === null) { return []; }
+
+    $messages = [];
+
+    foreach ($violations as $error) {
+      $violation          = $this->parseViolation($error);
+      $violation['path']  = $path;
+      $messages[]         = ArcanistLintMessage::newFromDictionary($violation);
+    }
+
+    $this->cleanGeneratedFiles();
+
+    return $messages;
+  }
+
+  private function parseViolation(SimpleXMLElement $xml) {
+      return array(
+          'code'        => $this->getLinterName(),
+          'name'        => (string)str_replace('detekt.', '', $xml['source']),
+          'line'        => (int)$xml['line'],
+          'char'        => (int)$xml['column'],
+          'severity'    => $this->getArcanistSeverity((string)$xml['severity']),
+          'description' => (string)$xml['message'],
+      );
+  }
+
+  /**
+   * Clean up the generated files from Detekt
+   */
+  private function cleanGeneratedFiles() {
+    $generated_extensions = ['html', 'txt', 'xml'];
+    foreach ($generated_extensions as $extension) {
+      $file_path = dirname(__FILE__).'/'.$this->outputName.'.'.$extension;
+      if (file_exists($file_path)) {
+        unlink($file_path);
+      }
+    }
+  }
+
+  /**
+   * Check if a path exists, here or one level higher.
+   */
   private function pathExist($path) {
     $working_copy = $this->getEngine()->getWorkingCopy();
     $root = $working_copy->getProjectRoot();
@@ -156,5 +185,22 @@ final class DetektLinter extends ArcanistExternalLinter {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Match the severity string to an ArcanistLintSeverity
+   */
+  private function getArcanistSeverity($severity_name) {
+      $map = array(
+          'error' => ArcanistLintSeverity::SEVERITY_ERROR,
+          'warning' => ArcanistLintSeverity::SEVERITY_WARNING,
+          'info' => ArcanistLintSeverity::SEVERITY_ADVICE,
+      );
+      foreach ($map as $name => $severity) {
+          if ($severity_name == $name) {
+              return $severity;
+          }
+      }
+      return ArcanistLintSeverity::SEVERITY_WARNING;
   }
 }
